@@ -4,8 +4,9 @@ import os
 from pathlib import Path
 from typing import Dict, Any
 
-from .detectors import VitPoseDetector, HRNetDetector, CSPDetector
-# from .detectors import MSPNDetector  # Comentado - no usar MSPN
+from .detectors import TrtDetector
+# Detectores mmpose comentados - usando solo TRT
+# from .detectors import VitPoseDetector, HRNetDetector, CSPDetector, MSPNDetector
 from config.settings import gpu_config
 
 logger = logging.getLogger(__name__)
@@ -19,10 +20,7 @@ class PoseProcessingCoordinator:
     def __init__(self):
         """Inicializar coordinador con todos los detectores disponibles"""
         self.detectors = [
-            VitPoseDetector(),
-            # MSPNDetector(),
-            HRNetDetector(),
-            CSPDetector()
+            TrtDetector()  # Solo usar TRT detector
         ]
         self.initialized = False
         
@@ -33,6 +31,7 @@ class PoseProcessingCoordinator:
         
         logger.info(f"GPUs configuradas: {self.available_gpus}")
         logger.info(f"Máximo chunks concurrentes: {gpu_config.max_concurrent_chunks}")
+        logger.info("Inicializando coordinador con detector TRT únicamente")
     
     def initialize_all(self) -> bool:
         """
@@ -42,19 +41,32 @@ class PoseProcessingCoordinator:
             True si al menos uno se inicializó correctamente
         """
         success_count = 0
+        available_detectors = []
+        failed_detectors = []
         
         for detector in self.detectors:
             try:
                 if detector.initialize():
                     success_count += 1
+                    available_detectors.append(detector.model_name)
                     logger.info(f"Detector {detector.model_name} initialized successfully")
                 else:
+                    failed_detectors.append(detector.model_name)
                     logger.warning(f"Failed to initialize detector {detector.model_name}")
             except Exception as e:
+                failed_detectors.append(detector.model_name)
                 logger.error(f"Error initializing detector {detector.model_name}: {e}")
         
         self.initialized = success_count > 0
+        
+        # Log detallado de detectores
+        logger.info(f"Detectores cargados: {available_detectors}")
+        if failed_detectors:
+            logger.warning(f"Detectores fallidos: {failed_detectors}")
         logger.info(f"Pose coordinator initialized: {success_count}/{len(self.detectors)} detectors ready")
+        
+        if not self.initialized:
+            raise RuntimeError("Error initializing pose processing coordinator - no detectors available")
         
         return self.initialized
     
