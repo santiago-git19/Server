@@ -23,6 +23,7 @@ logger = logging.getLogger(__name__)
 class TrtDetector:
     """
     Wrapper para el detector TRT que implementa la interfaz esperada por el coordinador
+    a
     """
     
     def __init__(self):
