@@ -32,15 +32,22 @@ class TrtDetector:
         self.is_initialized = False
         self.processor: Optional[TRTPoseProcessor] = None
         
-        # Rutas por defecto - pueden ajustarse según configuración
-        self.model_path = codigo_path / "models" / "pose_landmark_lite_fp16.engine"
+        # Rutas por defecto - usar modelo PyTorch primero, luego TensorRT
+        self.model_path = codigo_path / "models" / "resnet18_baseline_att_224x224_A_epoch_249.pth"
         self.topology_path = codigo_path / "models" / "human_pose.json"
         
         # Verificar si las rutas alternativas existen
-        alt_model_path = codigo_path / "models" / "densenet121_baseline_att_256x256_B_epoch_160.pth"
-        if not self.model_path.exists() and alt_model_path.exists():
-            self.model_path = alt_model_path
-            logger.info(f"Usando modelo alternativo: {self.model_path}")
+        alt_models = [
+            codigo_path / "models" / "densenet121_baseline_att_256x256_B_epoch_160.pth",
+            codigo_path / "models" / "pose_landmark_lite_fp16.engine"
+        ]
+        
+        if not self.model_path.exists():
+            for alt_model in alt_models:
+                if alt_model.exists():
+                    self.model_path = alt_model
+                    logger.info(f"Usando modelo alternativo: {self.model_path}")
+                    break
     
     def initialize(self) -> bool:
         """
@@ -88,11 +95,14 @@ class TrtDetector:
             
             logger.info(f"Inicializando TRT detector con modelo: {self.model_path}")
             
-            # Crear instancia del procesador
+            # Determinar si usar TensorRT basado en la extensión del archivo
+            use_tensorrt = str(self.model_path).endswith('.engine')
+            
+            # Crear instancia del procesador con mejor manejo de errores
             self.processor = TRTPoseProcessor(
                 model_path=str(self.model_path),
                 topology_path=str(self.topology_path),
-                use_tensorrt=True  # Intentar TensorRT primero
+                use_tensorrt=use_tensorrt
             )
             
             self.is_initialized = True
