@@ -5,7 +5,7 @@ import json
 import cv2
 import numpy as np
 from pathlib import Path
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List, Tuple
 
 # Añadir el directorio Codigo al path para importar trt_pose_proc
 codigo_path = Path(__file__).parent.parent.parent.parent.parent / "Codigo" / "Automatizacion"
@@ -209,6 +209,82 @@ class TrtDetector:
             import traceback
             traceback.print_exc()
             return False
+
+    def process_and_visualize_chunk(self, video_path: Path, max_frames: Optional[int] = None,
+                                    draw_skeleton: bool = True) -> Tuple[List[Any], List[np.ndarray]]:
+        """
+        Procesa un chunk (video) y devuelve los keypoints por frame y los frames modificados
+
+        No guarda archivos ni muestra ventanas. Esto permite que el caller haga
+        modificaciones adicionales sobre los frames ya anotados.
+
+        Args:
+            video_path: Ruta al archivo de video a procesar
+            max_frames: Si se especifica, limita el número de frames procesados
+            draw_skeleton: Si debe dibujarse el esqueleto además de los keypoints
+
+        Returns:
+            Tuple[List[keypoints], List[modified_frames]]
+            - keypoints: lista donde cada elemento es la lista/estructura de keypoints del frame
+            - modified_frames: lista de numpy arrays con los frames anotados
+        """
+        keypoints_list: List[Any] = []
+        modified_frames: List[np.ndarray] = []
+
+        if not self.is_initialized:
+            logger.error("TRT detector no está inicializado")
+            return keypoints_list, modified_frames
+
+        cap = None
+        try:
+            cap = cv2.VideoCapture(str(video_path))
+            if not cap.isOpened():
+                logger.error(f"No se pudo abrir el video: {video_path}")
+                return keypoints_list, modified_frames
+
+            frame_count = 0
+            while True:
+                if max_frames is not None and frame_count >= max_frames:
+                    break
+
+                ret, frame = cap.read()
+                if not ret:
+                    break
+
+                # Obtener keypoints (si tenemos un procesador real)
+                if self.processor is not None:
+                    try:
+                        keypoints = self.processor.process_frame(frame)
+                    except Exception as e:
+                        logger.error(f"Error en process_frame: {e}")
+                        keypoints = []
+
+                    # Visualizar keypoints en una copia del frame
+                    try:
+                        vis_frame = self.processor.visualize_keypoints(frame, keypoints, draw_skeleton)
+                    except Exception as e:
+                        logger.error(f"Error visualizando keypoints: {e}")
+                        vis_frame = frame.copy()
+                else:
+                    # Si no hay procesador, devolver frames originales y keypoints vacíos
+                    logger.debug("Procesador no disponible: devolviendo frames originales sin keypoints")
+                    keypoints = []
+                    vis_frame = frame.copy()
+
+                keypoints_list.append(keypoints)
+                modified_frames.append(vis_frame)
+                frame_count += 1
+
+            return keypoints_list, modified_frames
+
+        except Exception as e:
+            logger.error(f"Error procesando y visualizando chunk: {e}")
+            import traceback
+            traceback.print_exc()
+            return keypoints_list, modified_frames
+        finally:
+            if cap is not None:
+                cap.release()
     
     def _save_results(self, keypoints_data: list, patient_id: str, session_id: str, 
                      camera_id: int, chunk_id: str):
