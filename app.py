@@ -478,7 +478,7 @@ def receive_chunk():
             
             # Procesar este chunk con todos los detectores tradicionales
             chunk_id = str(chunk_number)
-            '''
+            
             processing_results = pose_coordinator.process_chunk(
                 video_path=color_path,
                 patient_id=patient_id,
@@ -486,11 +486,12 @@ def receive_chunk():
                 camera_id=camera_id,
                 chunk_id=chunk_id
             )
-            '''
+            
             
             success_count = sum(processing_results.values())
             logger.info(f"Chunk {chunk_number} cámara {camera_id} procesado - {success_count}/{len(processing_results)} detectores exitosos")
             
+
             # Procesamiento avanzado con visualización si TRT detector está disponible
             advanced_results = None
             try:
