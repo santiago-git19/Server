@@ -252,20 +252,25 @@ def end_session():
 
 def _check_camera_chunks_integrity(patient_id: str, session_id: str, cameras_count: int):
     """
-    Verificar que todas las cámaras tengan al menos el chunk 0
+    Verificar que todas las cámaras tengan al menos el chunk 0 con color y profundidad
     """
     try:
         session_base = data_config.unprocessed_dir / f"patient{patient_id}" / f"session{session_id}"
         
         for camera_id in range(cameras_count):
             camera_dir = session_base / f"camera{camera_id}"
-            chunk_0_file = camera_dir / "0.mp4"
+            chunk_0_color = camera_dir / "0_color.mp4"
+            chunk_0_depth = camera_dir / "0_depth.npy"
             
-            if not chunk_0_file.exists():
-                logger.error(f" FALLO DE CÁMARAS: La cámara {camera_id} NO tiene chunk 0")
+            if not chunk_0_color.exists():
+                logger.error(f" FALLO DE CÁMARAS: La cámara {camera_id} NO tiene chunk 0 de color")
+                return False
+                
+            if not chunk_0_depth.exists():
+                logger.error(f" FALLO DE CÁMARAS: La cámara {camera_id} NO tiene chunk 0 de profundidad")
                 return False
         
-        logger.info(f" Verificación de integridad OK: Todas las {cameras_count} cámaras tienen chunk 0")
+        logger.info(f" Verificación de integridad OK: Todas las {cameras_count} cámaras tienen chunk 0 (color y profundidad)")
         return True
         
     except Exception as e:
@@ -333,26 +338,33 @@ def receive_chunk():
     Recibir chunk de video para procesamiento
     
     Form data:
-    - file: archivo de video (.mp4)
+    - file_color: archivo de video de color (.mp4)
+    - file_depth: archivo de datos de profundidad (.npy)
     - camera_id: ID de la cámara (0, 1, 2...)
     - chunk_number: número del chunk
+    - chunk_id: ID único del chunk
+    - patient_id: ID del paciente
+    - session_id: ID de la sesión
     """
     try:
         # Verificar sesión activa
         if not current_session['is_active']:
             return jsonify({'error': 'No active session'}), 400
         
-        # Verificar archivo
-        if 'file' not in request.files:
-            return jsonify({'error': 'No file provided'}), 400
+        # Verificar archivos
+        if 'file_color' not in request.files or 'file_depth' not in request.files:
+            return jsonify({'error': 'Both file_color and file_depth are required'}), 400
         
-        file = request.files['file']
-        if file.filename == '':
-            return jsonify({'error': 'No file selected'}), 400
+        file_color = request.files['file_color']
+        file_depth = request.files['file_depth']
+        
+        if file_color.filename == '' or file_depth.filename == '':
+            return jsonify({'error': 'Both file_color and file_depth must be provided'}), 400
         
         # Obtener metadatos
         camera_id = request.form.get('camera_id')
         chunk_number = request.form.get('chunk_number')
+        chunk_id = request.form.get('chunk_id')
         
         if camera_id is None or chunk_number is None:
             return jsonify({'error': 'camera_id and chunk_number are required'}), 400
@@ -367,7 +379,7 @@ def receive_chunk():
         if camera_id >= current_session['cameras_count']:
             return jsonify({'error': f'Invalid camera_id. Max: {current_session["cameras_count"]-1}'}), 400
         
-        # Guardar archivo
+        # Guardar archivos
         patient_id = current_session['patient_id']
         session_id = current_session['session_id']
         
@@ -390,12 +402,34 @@ def receive_chunk():
         save_dir = data_config.unprocessed_dir / f"patient{patient_id}" / f"session{session_id}" / f"camera{camera_id}"
         save_dir.mkdir(parents=True, exist_ok=True)
         
-        filename = f"{chunk_number}.mp4"
-        file_path = save_dir / filename
+        # Guardar archivo de color
+        color_filename = f"{chunk_number}_color.mp4"
+        color_path = save_dir / color_filename
+        file_color.save(str(color_path))
         
-        file.save(str(file_path))
+        # Guardar archivo de profundidad
+        depth_filename = f"{chunk_number}_depth.npy"
+        depth_path = save_dir / depth_filename
+        file_depth.save(str(depth_path))
         
-        logger.info(f"Chunk recibido - Cámara: {camera_id}, Chunk: {chunk_number}, Tamaño: {file_path.stat().st_size} bytes")
+        color_size = color_path.stat().st_size
+        depth_size = depth_path.stat().st_size
+        
+        logger.info(f"Chunk recibido - Cámara: {camera_id}, Chunk: {chunk_number}")
+        logger.info(f"  Color: {color_size} bytes ({color_filename})")
+        logger.info(f"  Depth: {depth_size} bytes ({depth_filename})")
+        
+        return jsonify({
+            'status': 'chunk_received',
+            'camera_id': camera_id,
+            'chunk_number': chunk_number,
+            'chunk_id': chunk_id,
+            'color_file_path': str(color_path),
+            'depth_file_path': str(depth_path),
+            'color_file_size': color_size,
+            'depth_file_size': depth_size,
+            'message': 'Chunk with color and depth data saved successfully'
+        })
 
         # Inicializar solo una vez el coordinador de los detectores 2D (si no se usa el lock, se inicializa varias veces y falla)
         with coordinator_lock:
@@ -433,11 +467,13 @@ def receive_chunk():
             logger.info(f"Procesamiento paralelo completado para chunk {chunk_number} cámara {camera_id}")
             
             # Registrar finalización del chunk en ensemble processor. Cuando se haya procesado el último chunk de todas las cámaras, se iniciará automáticamente el ensemble.
-            chunk_completed = ensemble_processor.register_chunk_completion(
-                patient_id, session_id, f"camera{camera_id}", chunk_number
-            )
-            if chunk_completed:
-                logger.info(f"¡Chunk final completado por todas las cámaras! Ensemble iniciado automáticamente")
+            # COMENTADO -------------------------------------------------------------
+            #chunk_completed = ensemble_processor.register_chunk_completion(
+            #    patient_id, session_id, f"camera{camera_id}", chunk_number
+            #)
+            #if chunk_completed:
+            #    logger.info(f"¡Chunk final completado por todas las cámaras! Ensemble iniciado automáticamente")
+            # -----------------------------------------------------------------------
 
         response_data = {
             'status': 'chunk_received',
