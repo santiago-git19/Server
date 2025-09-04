@@ -419,17 +419,7 @@ def receive_chunk():
         logger.info(f"  Color: {color_size} bytes ({color_filename})")
         logger.info(f"  Depth: {depth_size} bytes ({depth_filename})")
         
-        return jsonify({
-            'status': 'chunk_received',
-            'camera_id': camera_id,
-            'chunk_number': chunk_number,
-            'chunk_id': chunk_id,
-            'color_file_path': str(color_path),
-            'depth_file_path': str(depth_path),
-            'color_file_size': color_size,
-            'depth_file_size': depth_size,
-            'message': 'Chunk with color and depth data saved successfully'
-        })
+        
 
         # Inicializar solo una vez el coordinador de los detectores 2D (si no se usa el lock, se inicializa varias veces y falla)
         with coordinator_lock:
@@ -475,13 +465,17 @@ def receive_chunk():
             #    logger.info(f"¡Chunk final completado por todas las cámaras! Ensemble iniciado automáticamente")
             # -----------------------------------------------------------------------
 
+        
         response_data = {
             'status': 'chunk_received',
             'camera_id': camera_id,
             'chunk_number': chunk_number,
-            'file_path': str(file_path),
-            'file_size': file_path.stat().st_size,
-            'message': 'Chunk saved successfully'
+            'chunk_id': chunk_id,
+            'color_file_path': str(color_path),
+            'depth_file_path': str(depth_path),
+            'color_file_size': color_size,
+            'depth_file_size': depth_size,
+            'message': 'Chunk with color and depth data saved successfully'
         }
         
         # Agregar información de procesamiento.
