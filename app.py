@@ -388,6 +388,7 @@ def receive_chunk():
         file_depth = request.files['file_depth']
         
         if file_color.filename == '' or file_depth.filename == '':
+            print(request.files)
             return jsonify({'error': 'Both file_color and file_depth must be provided'}), 400
         
         # Obtener metadatos
