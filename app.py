@@ -21,6 +21,7 @@ from backend.processing.ensemble import EnsembleProcessor
 from backend.processing.action_and_movement_detection.manual_action_detector import PostureClassifier
 from backend.processing.action_and_movement_detection.gait_3d_tracker import Gait3DTracker
 from backend.processing.action_and_movement_detection.advanced_visualization import process_chunk_with_advanced_visualization
+from backend.processing.detectors.trt_detector import TrtDetector  # Import TrtDetector
 
 # Crear aplicación Flask
 app = Flask(__name__)
@@ -505,8 +506,7 @@ def receive_chunk():
                 advanced_output_dir.mkdir(parents=True, exist_ok=True)
                 
                 # Obtener TRT detector del coordinador
-                trt_detector = getattr(pose_coordinator, 'trt_detector', None)
-                trt_detector = True
+                trt_detector = next((detector for detector in pose_coordinator.detectors if isinstance(detector, TrtDetector)), None)
                 if trt_detector and trt_detector.is_initialized:
                     logger.info(f"Iniciando procesamiento avanzado para chunk {chunk_number} cámara {camera_id}")
                     
