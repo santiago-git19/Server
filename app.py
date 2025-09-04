@@ -506,6 +506,7 @@ def receive_chunk():
                 
                 # Obtener TRT detector del coordinador
                 trt_detector = getattr(pose_coordinator, 'trt_detector', None)
+                trt_detector = True
                 if trt_detector and trt_detector.is_initialized:
                     logger.info(f"Iniciando procesamiento avanzado para chunk {chunk_number} cámara {camera_id}")
                     
