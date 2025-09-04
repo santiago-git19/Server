@@ -2,6 +2,8 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 import logging
 import threading
+import numpy as np
+from pathlib import Path
 
 # Configurar logging
 logging.basicConfig(
@@ -14,6 +16,11 @@ logger = logging.getLogger(__name__)
 from config import server_config, data_config, gpu_config
 from backend.processing.coordinator import PoseProcessingCoordinator
 from backend.processing.ensemble import EnsembleProcessor
+
+# Importar nuevos módulos para visualización avanzada
+from backend.processing.action_and_movement_detection.manual_action_detector import PostureClassifier
+from backend.processing.action_and_movement_detection.gait_3d_tracker import Gait3DTracker
+from backend.processing.action_and_movement_detection.advanced_visualization import process_chunk_with_advanced_visualization
 
 # Crear aplicación Flask
 app = Flask(__name__)
@@ -48,6 +55,22 @@ current_session = {
 
 # Variable para controlar si ya verificamos el chunk 2
 chunk_2_verified = False
+
+# Inicializar detectores avanzados
+# Parámetros intrínsecos de la cámara (Orbbec Gemini 335Le - valores aproximados)
+camera_intrinsics = {
+    'fx': 570.3,
+    'fy': 570.3,
+    'cx': 320.0,
+    'cy': 240.0
+}
+
+# Instancias globales para análisis avanzado
+posture_classifier = PostureClassifier(confidence_threshold=0.01)
+gait_tracker = Gait3DTracker(camera_intrinsics=camera_intrinsics)
+
+# Lock para gait tracker (para evitar concurrencia entre chunks)
+gait_tracker_lock = threading.Lock()
 
 @app.route('/health', methods=['GET'])
 def health_check():
@@ -126,6 +149,11 @@ def start_session():
         
         # Registrar sesión en ensemble processor
         ensemble_processor.register_session_start(patient_id, session_id, cameras_count)
+        
+        # Reiniciar gait tracker para nueva sesión
+        with gait_tracker_lock:
+            gait_tracker.reset()
+            logger.info("Gait tracker reiniciado para nueva sesión")
         
         # Reiniciar flag de verificación de chunk 2. Esto es para cuando las cámaras fallan, que algunas graban chunks y otras no. Si se recibe el primer chunk 2, se verificará que todas las cámaras tengan al menos el chunk 0.
         global chunk_2_verified
@@ -442,18 +470,62 @@ def receive_chunk():
         with processing_semaphore:
             logger.info(f"Iniciando procesamiento paralelo de chunk {chunk_number} cámara {camera_id} (máximo {gpu_config.max_concurrent_chunks} simultáneos)")
             
-            # Procesar este chunk con todos los detectores
+            # Procesar este chunk con todos los detectores tradicionales
             chunk_id = str(chunk_number)
+            '''
             processing_results = pose_coordinator.process_chunk(
-                video_path=file_path,
+                video_path=color_path,
                 patient_id=patient_id,
                 session_id=session_id,
                 camera_id=camera_id,
                 chunk_id=chunk_id
             )
+            '''
             
             success_count = sum(processing_results.values())
             logger.info(f"Chunk {chunk_number} cámara {camera_id} procesado - {success_count}/{len(processing_results)} detectores exitosos")
+            
+            # Procesamiento avanzado con visualización si TRT detector está disponible
+            advanced_results = None
+            try:
+                # Cargar frames de profundidad
+                depth_frames = np.load(str(depth_path))
+                if not isinstance(depth_frames, list):
+                    depth_frames = [depth_frames] if depth_frames.ndim == 2 else list(depth_frames)
+                
+                # Directorio para guardar resultados avanzados
+                advanced_output_dir = data_config.processed_dir / f"patient{patient_id}" / f"session{session_id}" / "advanced_analysis"
+                advanced_output_dir.mkdir(parents=True, exist_ok=True)
+                
+                # Obtener TRT detector del coordinador
+                trt_detector = getattr(pose_coordinator, 'trt_detector', None)
+                if trt_detector and trt_detector.is_initialized:
+                    logger.info(f"Iniciando procesamiento avanzado para chunk {chunk_number} cámara {camera_id}")
+                    
+                    with gait_tracker_lock:
+                        # Procesar con visualización avanzada
+                        advanced_results = process_chunk_with_advanced_visualization(
+                            trt_detector=trt_detector,
+                            manual_action_detector=posture_classifier,
+                            gait_tracker=gait_tracker,
+                            video_path=color_path,
+                            depth_frames=depth_frames,
+                            camera_id=camera_id,
+                            chunk_id=chunk_id,
+                            output_dir=advanced_output_dir
+                        )
+                        
+                        logger.info(f"Procesamiento avanzado completado para chunk {chunk_number} cámara {camera_id}")
+                        if advanced_results.get('success'):
+                            logger.info(f"Video anotado guardado: {advanced_results.get('video_path')}")
+                            logger.info(f"Distancia total de marcha: {advanced_results.get('total_gait_distance', 0):.3f}m")
+                else:
+                    logger.warning("TRT detector no disponible para procesamiento avanzado")
+                    
+            except Exception as e:
+                logger.error(f"Error en procesamiento avanzado: {e}")
+                advanced_results = {'success': False, 'error': str(e)}
+            
             logger.info(f"Procesamiento paralelo completado para chunk {chunk_number} cámara {camera_id}")
             
             # Registrar finalización del chunk en ensemble processor. Cuando se haya procesado el último chunk de todas las cámaras, se iniciará automáticamente el ensemble.
@@ -484,11 +556,49 @@ def receive_chunk():
         response_data['successful_detectors'] = sum(processing_results.values())
         response_data['total_detectors'] = len(processing_results)
         
+        # Agregar resultados del procesamiento avanzado
+        if advanced_results:
+            response_data['advanced_processing'] = advanced_results
+            if advanced_results.get('success'):
+                response_data['annotated_video_path'] = advanced_results.get('video_path')
+                response_data['gait_analysis'] = {
+                    'chunk_distance': advanced_results.get('gait_distance', 0),
+                    'total_distance': advanced_results.get('total_gait_distance', 0),
+                    'trajectory_points': advanced_results.get('gait_trajectory_points', 0)
+                }
+                response_data['action_detection'] = {
+                    'processed_frames': advanced_results.get('processed_frames', 0),
+                    'results_count': len(advanced_results.get('action_results', []))
+                }
+        
         return jsonify(response_data)
         
     except Exception as e:
         logger.error(f"Error recibiendo chunk: {str(e)}")
         return jsonify({'error': f'Failed to receive chunk: {str(e)}'}), 500
+
+@app.route('/api/gait/stats', methods=['GET'])
+def get_gait_stats():
+    """
+    Obtener estadísticas actuales del gait tracker
+    """
+    try:
+        with gait_tracker_lock:
+            stats = gait_tracker.stats()
+        
+        return jsonify({
+            'status': 'success',
+            'gait_stats': stats,
+            'session_info': {
+                'patient_id': current_session.get('patient_id'),
+                'session_id': current_session.get('session_id'),
+                'is_active': current_session.get('is_active', False)
+            }
+        })
+        
+    except Exception as e:
+        logger.error(f"Error obteniendo estadísticas de gait: {str(e)}")
+        return jsonify({'error': f'Failed to get gait stats: {str(e)}'}), 500
 
 @app.route('/api/gpu/status', methods=['GET'])
 def get_gpu_status():
