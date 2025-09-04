@@ -381,6 +381,7 @@ def receive_chunk():
         
         # Verificar archivos
         if 'file_color' not in request.files or 'file_depth' not in request.files:
+            print("----------------------------------------")
             print(request.files)
             return jsonify({'error': 'Both file_color and file_depth are required'}), 400
         
@@ -388,6 +389,7 @@ def receive_chunk():
         file_depth = request.files['file_depth']
         
         if file_color.filename == '' or file_depth.filename == '':
+            print("+++++++++++++++++++++++++++++++++++++++++++")
             print(request.files)
             return jsonify({'error': 'Both file_color and file_depth must be provided'}), 400
         
