@@ -189,7 +189,7 @@ def draw_advanced_frame_info(
                     left_hip = (float(x), float(y), float(conf))
                 elif part_id == 12:  # COCO_RIGHT_HIP
                     right_hip = (float(x), float(y), float(conf))
-        
+    '''
         # Calcular mid_hip si tenemos ambas caderas
         if left_hip and right_hip:
             mid_hip_x = int((left_hip[0] + right_hip[0]) / 2)
@@ -210,7 +210,8 @@ def draw_advanced_frame_info(
             if min_conf > 0.7:  # Solo mostrar si confianza alta
                 conf_text = f"{min_conf:.1f}"
                 cv2.putText(output_frame, conf_text, (mid_hip_x + 8, mid_hip_y - 8), font, font_scale*0.6, hip_color, 1)
-    
+    '''
+
     # Dibujar trayectoria usando las coordenadas reales del mid_hip cuando disponible
     if gait_tracking_result and 'trajectory_points' in gait_tracking_result and mid_hip_2d is not None:
         trajectory_points = gait_tracking_result['trajectory_points']
