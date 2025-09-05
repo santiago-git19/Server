@@ -168,22 +168,26 @@ class Gait3DTracker:
             np.ndarray(3,) con el punto filtrado en metros (X,Y,Z) o None si inválido
         """
         if depth_frame is None or keypoints is None:
+            print("++++++++++++++++++"+ "depth_frame is None or keypoints is None:" +"++++++++++++++++++")
             return None
 
         # 1) Centro de cadera 2D
         hip = self._extract_hip_center_2d(keypoints, self.min_conf)
         if not hip:
+            print("++++++++++++++++++"+ "not hip" +"++++++++++++++++++")
             return None
         x, y, _ = hip
 
         # 2) Profundidad robusta (mm)
         z_mm_region = self._region_depth_mm(depth_frame, x, y)
         if z_mm_region is None:
+            print("++++++++++++++++++"+ "not z_mm_region" +"++++++++++++++++++")
             return None
 
         # 3) Coordenadas 3D en mm
         xyz_mm = self._convert_to_3d_coordinates(x, y, z_mm_region)
         if xyz_mm is None:
+            print("++++++++++++++++++"+ "not xyz_mm" +"++++++++++++++++++")
             return None
 
         x_3d, y_3d, z_3d = xyz_mm
@@ -237,6 +241,7 @@ class Gait3DTracker:
                     logger.debug(f"Frame {i}: Punto 3D procesado: {point_3d}")
                 else:
                     logger.debug(f"Frame {i}: No se pudo obtener punto 3D válido")
+                    print("++++++++++++++++++"+ f"Frame {i}: No se pudo obtener punto 3D válido" +"++++++++++++++++++") 
             except Exception as e:
                 logger.error(f"Error procesando frame {i}: {e}")
                 continue
