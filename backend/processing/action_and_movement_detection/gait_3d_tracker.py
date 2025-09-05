@@ -54,7 +54,7 @@ class Gait3DTracker:
         self,
         camera_intrinsics: Dict[str, float],
         region: int = 7,
-        min_conf: float = 0.3,
+        min_conf: float = 0.01,
         smoothing_alpha: float = 0.2,
         min_valid_depth_percent: float = 25.0,
         max_jump_m: float = 1.0,
