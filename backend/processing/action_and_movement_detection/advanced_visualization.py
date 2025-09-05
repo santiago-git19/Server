@@ -78,10 +78,10 @@ def draw_advanced_frame_info(
     output_frame = frame_with_skeleton.copy()
     height, width = output_frame.shape[:2]
     
-    # Configuración de texto
+    # Configuración de texto - reducir tamaños
     font = cv2.FONT_HERSHEY_SIMPLEX
-    font_scale = 0.6
-    thickness = 2
+    font_scale = 0.4  # Reducido de 0.6
+    thickness = 1     # Reducido de 2
     
     # Colores
     bg_color = (0, 0, 0)  # Negro para fondo
@@ -93,93 +93,73 @@ def draw_advanced_frame_info(
     # Crear overlay semi-transparente para texto
     overlay = output_frame.copy()
     
-    # Panel de información en la parte superior
-    panel_height = 120
+    # Panel de información en la parte superior - más compacto
+    panel_height = 80  # Reducido de 120
     cv2.rectangle(overlay, (0, 0), (width, panel_height), bg_color, -1)
     
     # Información básica del frame
-    y_offset = 25
-    cv2.putText(overlay, f"Camera {camera_id} | Chunk {chunk_id} | Frame {frame_number}", 
+    y_offset = 18  # Reducido de 25
+    cv2.putText(overlay, f"Cam{camera_id} | F{frame_number} | {chunk_id}", 
                 (10, y_offset), font, font_scale, text_color, thickness)
     
     # Información de detección de acciones
-    y_offset += 30
+    y_offset += 20  # Reducido de 30
     if action_detection_result:
         posture = action_detection_result.get('posture', 'indeterminado')
         confidence = action_detection_result.get('confidence', 0.0)
         
-        posture_text = f"Posture: {posture} ({confidence:.2f})"
+        posture_text = f"Postura: {posture} ({confidence:.2f})"
         cv2.putText(overlay, posture_text, (10, y_offset), font, font_scale, posture_color, thickness)
         
         # Mostrar detalles adicionales si están disponibles
         if 'details' in action_detection_result:
             details = action_detection_result['details']
             if 'hip_knee_angle' in details:
-                angle_text = f"Hip-Knee Angle: {details['hip_knee_angle']:.1f}°"
-                cv2.putText(overlay, angle_text, (300, y_offset), font, font_scale-0.1, text_color, 1)
+                angle_text = f"Angulo: {details['hip_knee_angle']:.1f}°"
+                cv2.putText(overlay, angle_text, (250, y_offset), font, font_scale*0.8, text_color, 1)
     else:
-        cv2.putText(overlay, "Posture: No data", (10, y_offset), font, font_scale, error_color, thickness)
+        cv2.putText(overlay, "Postura: Sin datos", (10, y_offset), font, font_scale, error_color, thickness)
     
     # Información de tracking de marcha
-    y_offset += 30
-    if gait_tracking_result:
+    y_offset += 20  # Reducido de 30
+    if gait_tracking_result:        
+        # Mostrar distancias de forma más compacta
+        if 'total_distance' in gait_tracking_result and 'current_frame_distance' in gait_tracking_result:
+            total_dist = gait_tracking_result['total_distance']
+            frame_dist = gait_tracking_result['current_frame_distance']
+            dist_text = f"Distancia: {frame_dist:.2f}m / {total_dist:.2f}m total"
+            cv2.putText(overlay, dist_text, (10, y_offset), font, font_scale, distance_color, thickness)
+        elif 'total_distance' in gait_tracking_result:
+            total_dist = gait_tracking_result['total_distance']
+            dist_text = f"Distancia total: {total_dist:.2f}m"
+            cv2.putText(overlay, dist_text, (10, y_offset), font, font_scale, distance_color, thickness)
+        
+        # Mostrar posición 3D de forma compacta solo si es útil
         if 'point_3d' in gait_tracking_result and gait_tracking_result['point_3d'] is not None:
             point_3d = gait_tracking_result['point_3d']
-            distance_text = f"3D Position: ({point_3d[0]:.3f}, {point_3d[1]:.3f}, {point_3d[2]:.3f})m"
-            cv2.putText(overlay, distance_text, (10, y_offset), font, font_scale-0.1, distance_color, thickness)
-        
-        # Mostrar tanto distancia total como distancia parcial hasta este frame
-        if 'total_distance' in gait_tracking_result:
-            total_dist = gait_tracking_result['total_distance']
-            dist_text = f"Total Distance: {total_dist:.3f}m"
-            cv2.putText(overlay, dist_text, (10, y_offset + 20), font, font_scale-0.1, distance_color, thickness)
-        
-        if 'current_frame_distance' in gait_tracking_result:
-            frame_dist = gait_tracking_result['current_frame_distance']
-            frame_dist_text = f"Frame Distance: {frame_dist:.3f}m"
-            cv2.putText(overlay, frame_dist_text, (250, y_offset + 20), font, font_scale-0.1, (255, 200, 0), thickness)
-            
-        y_offset += 20  # Ajustar offset por las líneas adicionales
+            pos_text = f"Pos: ({point_3d[0]:.2f}, {point_3d[2]:.2f})m"
+            cv2.putText(overlay, pos_text, (300, y_offset), font, font_scale*0.8, (200, 200, 255), 1)
     else:
-        cv2.putText(overlay, "Gait Tracking: No data", (10, y_offset), font, font_scale, error_color, thickness)
+        cv2.putText(overlay, "Marcha: Sin datos", (10, y_offset), font, font_scale, error_color, thickness)
     
-    # Panel lateral para información detallada
+    # Información adicional compacta en la tercera línea (solo lo más importante)
+    y_offset += 20
     if action_detection_result and 'details' in action_detection_result:
         details = action_detection_result['details']
-        panel_x = width - 250
-        panel_y = panel_height + 10
-        panel_width = 240
-        panel_detail_height = 150
         
-        # Fondo para panel de detalles
-        cv2.rectangle(overlay, (panel_x, panel_y), (panel_x + panel_width, panel_y + panel_detail_height), bg_color, -1)
+        # Mostrar solo métricas clave de forma compacta
+        metrics_text = []
+        if 'balance_score' in details:
+            metrics_text.append(f"Balance: {details['balance_score']:.2f}")
+        if 'stability_index' in details:
+            metrics_text.append(f"Estab: {details['stability_index']:.2f}")
         
-        detail_y = panel_y + 20
-        cv2.putText(overlay, "Detection Details:", (panel_x + 5, detail_y), font, font_scale-0.1, text_color, 1)
-        
-        detail_y += 20
-        if 'frontal_result' in action_detection_result:
-            frontal = action_detection_result['frontal_result']
-            if 'posture' in frontal:
-                cv2.putText(overlay, f"Frontal: {frontal['posture']}", (panel_x + 5, detail_y), font, font_scale-0.2, text_color, 1)
-                detail_y += 15
-        
-        if 'lateral_result' in action_detection_result:
-            lateral = action_detection_result['lateral_result']
-            if 'posture' in lateral:
-                cv2.putText(overlay, f"Lateral: {lateral['posture']}", (panel_x + 5, detail_y), font, font_scale-0.2, text_color, 1)
-                detail_y += 15
-        
-        # Mostrar métricas adicionales
-        for key, value in details.items():
-            if isinstance(value, (int, float)) and key != 'hip_knee_angle':
-                if detail_y < panel_y + panel_detail_height - 15:
-                    text = f"{key}: {value:.2f}" if isinstance(value, float) else f"{key}: {value}"
-                    cv2.putText(overlay, text, (panel_x + 5, detail_y), font, font_scale-0.3, text_color, 1)
-                    detail_y += 12
+        if metrics_text:
+            combined_text = " | ".join(metrics_text)
+            cv2.putText(overlay, combined_text, (10, y_offset), font, font_scale*0.8, (200, 200, 200), 1)
     
-    # Combinar overlay con transparencia
-    alpha = 0.8
+    # Combinar overlay con transparencia más sutil
+    alpha = 0.7  # Reducido de 0.8 para ser menos intrusivo
     cv2.addWeighted(overlay, alpha, output_frame, 1 - alpha, 0, output_frame)
     
     # Dibujar indicadores visuales adicionales usando coordenadas reales del mid_hip
@@ -216,64 +196,82 @@ def draw_advanced_frame_info(
             mid_hip_y = int((left_hip[1] + right_hip[1]) / 2)
             mid_hip_2d = (mid_hip_x, mid_hip_y)
             
-            # Dibujar cruz en la posición real del mid_hip
-            cross_size = 8
-            cv2.line(output_frame, (mid_hip_x - cross_size, mid_hip_y), (mid_hip_x + cross_size, mid_hip_y), distance_color, 2)
-            cv2.line(output_frame, (mid_hip_x, mid_hip_y - cross_size), (mid_hip_x, mid_hip_y + cross_size), distance_color, 2)
-            cv2.circle(output_frame, (mid_hip_x, mid_hip_y), cross_size + 3, distance_color, 2)
+            # Dibujar marcador más discreto para mid_hip
+            cross_size = 4  # Reducido de 8
+            hip_color = (0, 200, 255)  # Color naranja más suave
             
-            # Agregar texto con las coordenadas 2D del mid_hip
-            coord_text = f"Hip 2D: ({mid_hip_x}, {mid_hip_y})"
-            cv2.putText(output_frame, coord_text, (mid_hip_x - 50, mid_hip_y - 20), font, font_scale-0.2, distance_color, 1)
+            # Cruz más pequeña y sutil
+            cv2.line(output_frame, (mid_hip_x - cross_size, mid_hip_y), (mid_hip_x + cross_size, mid_hip_y), hip_color, 1)
+            cv2.line(output_frame, (mid_hip_x, mid_hip_y - cross_size), (mid_hip_x, mid_hip_y + cross_size), hip_color, 1)
+            cv2.circle(output_frame, (mid_hip_x, mid_hip_y), 2, hip_color, -1)  # Punto central pequeño
             
-            # Mostrar confianza mínima de las caderas
+            # Texto más pequeño y menos intrusivo
             min_conf = min(left_hip[2], right_hip[2])
-            conf_text = f"Conf: {min_conf:.2f}"
-            cv2.putText(output_frame, conf_text, (mid_hip_x - 30, mid_hip_y + 25), font, font_scale-0.3, distance_color, 1)
+            if min_conf > 0.7:  # Solo mostrar si confianza alta
+                conf_text = f"{min_conf:.1f}"
+                cv2.putText(output_frame, conf_text, (mid_hip_x + 8, mid_hip_y - 8), font, font_scale*0.6, hip_color, 1)
     
-    # Si no tenemos keypoints válidos pero sí gait tracking, usar punto 3D proyectado
-    if mid_hip_2d is None and gait_tracking_result and 'point_3d' in gait_tracking_result and gait_tracking_result['point_3d'] is not None:
-        # Usar aproximación del centro de la imagen como fallback
-        center_x = width // 2
-        center_y = height // 2 + 50  # Offset hacia abajo para cadera
-        
-        cross_size = 10
-        cv2.line(output_frame, (center_x - cross_size, center_y), (center_x + cross_size, center_y), distance_color, 2)
-        cv2.line(output_frame, (center_x, center_y - cross_size), (center_x, center_y + cross_size), distance_color, 2)
-        cv2.circle(output_frame, (center_x, center_y), cross_size + 5, distance_color, 2)
-        cv2.putText(output_frame, "Hip (approx)", (center_x - 30, center_y - 15), font, font_scale-0.2, distance_color, 1)
-    
-    # Dibujar trayectoria si tenemos múltiples puntos 3D
-    if gait_tracking_result and 'trajectory_points' in gait_tracking_result:
+    # Dibujar trayectoria usando las coordenadas reales del mid_hip cuando disponible
+    if gait_tracking_result and 'trajectory_points' in gait_tracking_result and mid_hip_2d is not None:
         trajectory_points = gait_tracking_result['trajectory_points']
         if len(trajectory_points) > 1:
-            # Convertir puntos 3D a 2D para visualización (proyección simple)
-            trajectory_2d = []
-            for point_3d in trajectory_points[-10:]:  # Mostrar últimos 10 puntos
-                if point_3d is not None and len(point_3d) >= 2:
-                    # Proyección simple: usar coordenadas X, Z como X, Y en 2D
-                    # Escalar y centrar en la imagen
-                    x_2d = int(width // 2 + point_3d[0] * 100)  # Escala arbitraria
-                    y_2d = int(height - 100 - point_3d[2] * 50)  # Invertir Y, escala
-                    
-                    # Mantener dentro de los límites de la imagen
-                    x_2d = max(10, min(width - 10, x_2d))
-                    y_2d = max(10, min(height - 10, y_2d))
-                    
-                    trajectory_2d.append((x_2d, y_2d))
+            # Usar mini-mapa en esquina inferior derecha para la trayectoria 3D
+            minimap_size = 120
+            minimap_x = width - minimap_size - 10
+            minimap_y = height - minimap_size - 10
             
-            # Dibujar líneas conectando los puntos de trayectoria
-            if len(trajectory_2d) > 1:
-                for i in range(1, len(trajectory_2d)):
-                    cv2.line(output_frame, trajectory_2d[i-1], trajectory_2d[i], (0, 255, 255), 2)
-                
-                # Dibujar puntos
-                for point in trajectory_2d:
-                    cv2.circle(output_frame, point, 3, (0, 255, 255), -1)
-                
-                # Marcar punto actual
-                if trajectory_2d:
-                    cv2.circle(output_frame, trajectory_2d[-1], 6, (0, 255, 0), 2)
+            # Fondo del mini-mapa
+            cv2.rectangle(output_frame, (minimap_x, minimap_y), (minimap_x + minimap_size, minimap_y + minimap_size), (40, 40, 40), -1)
+            cv2.rectangle(output_frame, (minimap_x, minimap_y), (minimap_x + minimap_size, minimap_y + minimap_size), (100, 100, 100), 1)
+            
+            # Título del mini-mapa
+            cv2.putText(output_frame, "Trayectoria", (minimap_x + 5, minimap_y + 15), font, font_scale*0.7, (255, 255, 255), 1)
+            
+            # Convertir puntos 3D al mini-mapa
+            if len(trajectory_points) >= 2:
+                # Obtener rango de movimiento
+                points_array = np.array([p for p in trajectory_points[-20:] if p is not None])  # Últimos 20 puntos
+                if len(points_array) > 1:
+                    x_min, x_max = np.min(points_array[:, 0]), np.max(points_array[:, 0])
+                    z_min, z_max = np.min(points_array[:, 2]), np.max(points_array[:, 2])
+                    
+                    # Evitar división por cero
+                    x_range = max(x_max - x_min, 0.1)
+                    z_range = max(z_max - z_min, 0.1)
+                    
+                    minimap_traj = []
+                    for point_3d in trajectory_points[-20:]:
+                        if point_3d is not None:
+                            # Normalizar al mini-mapa
+                            x_norm = (point_3d[0] - x_min) / x_range
+                            z_norm = (point_3d[2] - z_min) / z_range
+                            
+                            x_map = int(minimap_x + 10 + x_norm * (minimap_size - 20))
+                            y_map = int(minimap_y + minimap_size - 10 - z_norm * (minimap_size - 40))
+                            
+                            minimap_traj.append((x_map, y_map))
+                    
+                    # Dibujar trayectoria en mini-mapa
+                    if len(minimap_traj) > 1:
+                        for i in range(1, len(minimap_traj)):
+                            alpha = i / len(minimap_traj)  # Desvanecimiento
+                            color_intensity = int(100 + alpha * 155)
+                            cv2.line(output_frame, minimap_traj[i-1], minimap_traj[i], (0, color_intensity, 255), 1)
+                        
+                        # Punto actual
+                        if minimap_traj:
+                            cv2.circle(output_frame, minimap_traj[-1], 2, (0, 255, 0), -1)
+            
+            # Dibujar línea sutil desde mid_hip actual a la trayectoria previa (solo si hay movimiento significativo)
+            if len(trajectory_points) > 5:
+                # Mostrar trail sutil en la imagen principal
+                trail_length = min(5, len(trajectory_points))
+                for i in range(max(0, len(trajectory_points) - trail_length), len(trajectory_points) - 1):
+                    if i < len(trajectory_points) - 1:
+                        # Usar posición actual del mid_hip como referencia
+                        alpha = (i - (len(trajectory_points) - trail_length)) / trail_length
+                        trail_color = (0, int(100 + alpha * 100), int(150 + alpha * 105))  # Gradiente azul
+                        cv2.circle(output_frame, mid_hip_2d, 1, trail_color, 1)
     
     return output_frame
 
