@@ -39,117 +39,181 @@ def draw_advanced_frame_info(
     output_frame = frame_with_skeleton.copy()
     height, width = output_frame.shape[:2]
     
-    # Configuración de texto
-    font = cv2.FONT_HERSHEY_SIMPLEX
-    font_scale = 0.6
-    thickness = 2
+    # Configuración de texto moderna
+    font = cv2.FONT_HERSHEY_DUPLEX
+    font_title = cv2.FONT_HERSHEY_TRIPLEX
+    font_scale_title = 0.8
+    font_scale_large = 0.7
+    font_scale_medium = 0.6
+    font_scale_small = 0.5
+    thickness_bold = 2
+    thickness_normal = 1
     
-    # Colores
-    bg_color = (0, 0, 0)  # Negro para fondo
-    text_color = (255, 255, 255)  # Blanco para texto
-    posture_color = (0, 255, 0)  # Verde para postura
-    distance_color = (255, 255, 0)  # Amarillo para distancia
-    error_color = (0, 0, 255)  # Rojo para errores
+    # Paleta de colores moderna y profesional
+    bg_dark = (20, 25, 30)        # Azul oscuro elegante
+    bg_semi = (40, 50, 60)        # Azul medio
+    accent_blue = (255, 193, 7)    # Amarillo dorado
+    accent_green = (76, 175, 80)   # Verde moderno
+    accent_orange = (255, 152, 0)  # Naranja vibrante
+    accent_red = (244, 67, 54)     # Rojo moderno
+    text_white = (255, 255, 255)   # Blanco puro
+    text_light = (220, 220, 220)   # Gris claro
+    text_medium = (180, 180, 180)  # Gris medio
     
-    # Crear overlay semi-transparente para texto
+    # Crear overlay con degradado
     overlay = output_frame.copy()
     
-    # Panel de información en la parte superior
-    panel_height = 120
-    cv2.rectangle(overlay, (0, 0), (width, panel_height), bg_color, -1)
+    # ===== HEADER PRINCIPAL CON DEGRADADO =====
+    header_height = 80
+    # Crear degradado para el header
+    for i in range(header_height):
+        alpha = 1.0 - (i / header_height) * 0.3  # De opaco a semi-transparente
+        color_intensity = int(bg_dark[0] * alpha), int(bg_dark[1] * alpha), int(bg_dark[2] * alpha)
+        cv2.line(overlay, (0, i), (width, i), color_intensity, 1)
     
-    # Información básica del frame
-    y_offset = 25
-    cv2.putText(overlay, f"Camera {camera_id} | Chunk {chunk_id} | Frame {frame_number}", 
-                (10, y_offset), font, font_scale, text_color, thickness)
+    # Línea accent en la parte superior
+    cv2.rectangle(overlay, (0, 0), (width, 4), accent_blue, -1)
     
-    # Información de detección de acciones
-    y_offset += 30
+    # Título principal con sombra
+    title_text = f"🎯 ANÁLISIS DE MOVIMIENTO | CÁMARA {camera_id}"
+    _draw_text_with_shadow(overlay, title_text, (20, 35), font_title, font_scale_title, text_white, thickness_bold)
+    
+    # Información del frame con iconos
+    frame_info = f"📹 Chunk {chunk_id} • Frame {frame_number:04d}"
+    _draw_text_with_shadow(overlay, frame_info, (20, 60), font, font_scale_medium, text_light, thickness_normal)
+    
+    # ===== PANEL LATERAL DERECHO MODERNO =====
+    panel_width = 320
+    panel_x = width - panel_width - 15
+    panel_y = header_height + 15
+    
+    # Panel principal con bordes redondeados (simulados)
+    _draw_rounded_rect(overlay, (panel_x, panel_y), (panel_width, 350), bg_semi, 15)
+    
+    # ===== SECCIÓN DE POSTURA =====
+    section_y = panel_y + 25
+    
+    # Título de sección
+    _draw_text_with_shadow(overlay, "🏃 DETECCIÓN DE POSTURA", (panel_x + 15, section_y), font, font_scale_medium, accent_green, thickness_bold)
+    
+    section_y += 35
     if action_detection_result:
         posture = action_detection_result.get('posture', 'indeterminado')
         confidence = action_detection_result.get('confidence', 0.0)
         
-        posture_text = f"Posture: {posture} ({confidence:.2f})"
-        cv2.putText(overlay, posture_text, (10, y_offset), font, font_scale, posture_color, thickness)
+        # Status con color según confianza
+        status_color = accent_green if confidence > 0.7 else accent_orange if confidence > 0.4 else accent_red
         
-        # Mostrar detalles adicionales si están disponibles
+        _draw_text_with_shadow(overlay, f"Estado: {posture.upper()}", (panel_x + 15, section_y), font, font_scale_large, status_color, thickness_bold)
+        
+        # Barra de confianza
+        section_y += 25
+        _draw_progress_bar(overlay, (panel_x + 15, section_y), 280, 12, confidence, accent_green, bg_dark)
+        _draw_text_with_shadow(overlay, f"Confianza: {confidence:.1%}", (panel_x + 15, section_y + 25), font, font_scale_small, text_light, thickness_normal)
+        
+        # Detalles adicionales
+        section_y += 40
         if 'details' in action_detection_result:
             details = action_detection_result['details']
             if 'hip_knee_angle' in details:
-                angle_text = f"Hip-Knee Angle: {details['hip_knee_angle']:.1f}°"
-                cv2.putText(overlay, angle_text, (300, y_offset), font, font_scale-0.1, text_color, 1)
+                angle = details['hip_knee_angle']
+                _draw_text_with_shadow(overlay, f"🦵 Ángulo Cadera-Rodilla: {angle:.1f}°", (panel_x + 15, section_y), font, font_scale_small, text_medium, thickness_normal)
     else:
-        cv2.putText(overlay, "Posture: No data", (10, y_offset), font, font_scale, error_color, thickness)
+        _draw_text_with_shadow(overlay, "❌ Sin datos de postura", (panel_x + 15, section_y), font, font_scale_medium, accent_red, thickness_normal)
     
-    # Información de tracking de marcha
-    y_offset += 30
+    # ===== SECCIÓN DE TRACKING 3D =====
+    section_y += 60
+    _draw_text_with_shadow(overlay, "📍 TRACKING DE MARCHA 3D", (panel_x + 15, section_y), font, font_scale_medium, accent_blue, thickness_bold)
+    
+    section_y += 35
     if gait_tracking_result:
         if 'point_3d' in gait_tracking_result and gait_tracking_result['point_3d'] is not None:
             point_3d = gait_tracking_result['point_3d']
-            distance_text = f"3D Position: ({point_3d[0]:.3f}, {point_3d[1]:.3f}, {point_3d[2]:.3f})m"
-            cv2.putText(overlay, distance_text, (10, y_offset), font, font_scale-0.1, distance_color, thickness)
+            
+            # Coordenadas 3D con formato mejorado
+            _draw_text_with_shadow(overlay, f"📐 Posición 3D:", (panel_x + 15, section_y), font, font_scale_small, text_light, thickness_normal)
+            section_y += 20
+            _draw_text_with_shadow(overlay, f"   X: {point_3d[0]:+.3f}m", (panel_x + 25, section_y), font, font_scale_small, text_medium, thickness_normal)
+            section_y += 18
+            _draw_text_with_shadow(overlay, f"   Y: {point_3d[1]:+.3f}m", (panel_x + 25, section_y), font, font_scale_small, text_medium, thickness_normal)
+            section_y += 18
+            _draw_text_with_shadow(overlay, f"   Z: {point_3d[2]:+.3f}m", (panel_x + 25, section_y), font, font_scale_small, text_medium, thickness_normal)
         
         if 'total_distance' in gait_tracking_result:
             total_dist = gait_tracking_result['total_distance']
-            dist_text = f"Total Distance: {total_dist:.3f}m"
-            cv2.putText(overlay, dist_text, (400, y_offset), font, font_scale, distance_color, thickness)
+            section_y += 30
+            
+            # Distancia total destacada
+            _draw_text_with_shadow(overlay, f"🎯 DISTANCIA TOTAL", (panel_x + 15, section_y), font, font_scale_small, text_light, thickness_normal)
+            section_y += 25
+            _draw_text_with_shadow(overlay, f"{total_dist:.3f} metros", (panel_x + 15, section_y), font, font_scale_large, accent_orange, thickness_bold)
     else:
-        cv2.putText(overlay, "Gait Tracking: No data", (10, y_offset), font, font_scale, error_color, thickness)
+        _draw_text_with_shadow(overlay, "❌ Sin datos de tracking", (panel_x + 15, section_y), font, font_scale_medium, accent_red, thickness_normal)
     
-    # Panel lateral para información detallada
-    if action_detection_result and 'details' in action_detection_result:
-        details = action_detection_result['details']
-        panel_x = width - 250
-        panel_y = panel_height + 10
-        panel_width = 240
-        panel_detail_height = 150
-        
-        # Fondo para panel de detalles
-        cv2.rectangle(overlay, (panel_x, panel_y), (panel_x + panel_width, panel_y + panel_detail_height), bg_color, -1)
-        
-        detail_y = panel_y + 20
-        cv2.putText(overlay, "Detection Details:", (panel_x + 5, detail_y), font, font_scale-0.1, text_color, 1)
-        
-        detail_y += 20
-        if 'frontal_result' in action_detection_result:
-            frontal = action_detection_result['frontal_result']
-            if 'posture' in frontal:
-                cv2.putText(overlay, f"Frontal: {frontal['posture']}", (panel_x + 5, detail_y), font, font_scale-0.2, text_color, 1)
-                detail_y += 15
-        
-        if 'lateral_result' in action_detection_result:
-            lateral = action_detection_result['lateral_result']
-            if 'posture' in lateral:
-                cv2.putText(overlay, f"Lateral: {lateral['posture']}", (panel_x + 5, detail_y), font, font_scale-0.2, text_color, 1)
-                detail_y += 15
-        
-        # Mostrar métricas adicionales
-        for key, value in details.items():
-            if isinstance(value, (int, float)) and key != 'hip_knee_angle':
-                if detail_y < panel_y + panel_detail_height - 15:
-                    text = f"{key}: {value:.2f}" if isinstance(value, float) else f"{key}: {value}"
-                    cv2.putText(overlay, text, (panel_x + 5, detail_y), font, font_scale-0.3, text_color, 1)
-                    detail_y += 12
-    
-    # Combinar overlay con transparencia
-    alpha = 0.8
-    cv2.addWeighted(overlay, alpha, output_frame, 1 - alpha, 0, output_frame)
-    
-    # Dibujar indicadores visuales adicionales
+    # ===== INDICADOR DE CENTRO DE CADERA MEJORADO =====
     if gait_tracking_result and 'point_3d' in gait_tracking_result and gait_tracking_result['point_3d'] is not None:
-        # Dibujar una cruz en el centro de la cadera proyectado
-        point_3d = gait_tracking_result['point_3d']
-        # Proyectar punto 3D de vuelta a 2D para visualización (aproximación)
-        # Esto es una aproximación simple, idealmente usarías los parámetros intrínsecos reales
+        # Dibujar indicador moderno en el centro de la cadera
         center_x = width // 2
-        center_y = height // 2 + 50  # Offset hacia abajo para cadera
+        center_y = height // 2 + 50
         
-        cross_size = 10
-        cv2.line(output_frame, (center_x - cross_size, center_y), (center_x + cross_size, center_y), distance_color, 2)
-        cv2.line(output_frame, (center_x, center_y - cross_size), (center_x, center_y + cross_size), distance_color, 2)
-        cv2.circle(output_frame, (center_x, center_y), cross_size + 5, distance_color, 2)
+        # Círculo principal con glow effect
+        cv2.circle(overlay, (center_x, center_y), 20, accent_orange, 2)
+        cv2.circle(overlay, (center_x, center_y), 15, accent_orange, 1)
+        cv2.circle(overlay, (center_x, center_y), 3, accent_orange, -1)
+        
+        # Cruz direccional moderna
+        cross_size = 12
+        cv2.line(overlay, (center_x - cross_size, center_y), (center_x + cross_size, center_y), accent_orange, 3)
+        cv2.line(overlay, (center_x, center_y - cross_size), (center_x, center_y + cross_size), accent_orange, 3)
     
-    return output_frame
+    # ===== FOOTER CON TIMESTAMP =====
+    footer_y = height - 25
+    _draw_text_with_shadow(overlay, f"⏱️  Análisis en tiempo real • Sistema de tracking avanzado", (20, footer_y), font, font_scale_small, text_medium, thickness_normal)
+    
+    # Combinar overlay con el frame original con transparencia
+    alpha = 0.85
+    result_frame = output_frame.copy()
+    cv2.addWeighted(overlay, alpha, result_frame, 1 - alpha, 0, result_frame)
+    
+    return result_frame
+
+def _draw_text_with_shadow(img, text, position, font, scale, color, thickness):
+    """Dibuja texto con sombra para mejor legibilidad"""
+    x, y = position
+    # Sombra
+    cv2.putText(img, text, (x + 2, y + 2), font, scale, (0, 0, 0), thickness + 1)
+    # Texto principal
+    cv2.putText(img, text, (x, y), font, scale, color, thickness)
+
+def _draw_rounded_rect(img, top_left, size, color, radius):
+    """Simula un rectángulo con bordes redondeados"""
+    x, y = top_left
+    w, h = size
+    
+    # Rectángulo principal
+    cv2.rectangle(img, (x + radius, y), (x + w - radius, y + h), color, -1)
+    cv2.rectangle(img, (x, y + radius), (x + w, y + h - radius), color, -1)
+    
+    # Círculos en las esquinas
+    cv2.circle(img, (x + radius, y + radius), radius, color, -1)
+    cv2.circle(img, (x + w - radius, y + radius), radius, color, -1)
+    cv2.circle(img, (x + radius, y + h - radius), radius, color, -1)
+    cv2.circle(img, (x + w - radius, y + h - radius), radius, color, -1)
+
+def _draw_progress_bar(img, position, width, height, progress, color_fill, color_bg):
+    """Dibuja una barra de progreso moderna"""
+    x, y = position
+    
+    # Fondo de la barra
+    cv2.rectangle(img, (x, y), (x + width, y + height), color_bg, -1)
+    
+    # Progreso
+    fill_width = int(width * max(0, min(1, progress)))
+    if fill_width > 0:
+        cv2.rectangle(img, (x, y), (x + fill_width, y + height), color_fill, -1)
+    
+    # Borde
+    cv2.rectangle(img, (x, y), (x + width, y + height), (100, 100, 100), 1)
 
 def save_annotated_chunk_video(
     annotated_frames: List[np.ndarray],
