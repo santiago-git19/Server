@@ -13,6 +13,43 @@ from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
+def convert_keypoints_to_gait_format(keypoints) -> Optional[List[Tuple[float, float, float, int]]]:
+    """
+    Convierte keypoints de diferentes formatos al formato esperado por gait_3d_tracker.
+    
+    Args:
+        keypoints: Keypoints en formato numpy (17,3) o lista de tuplas (x,y,conf,part_id)
+        
+    Returns:
+        Lista de tuplas (x, y, conf, part_id) o None si no se puede convertir
+    """
+    if keypoints is None:
+        return None
+    
+    # Si ya está en formato de lista de tuplas (x, y, conf, part_id)
+    if isinstance(keypoints, list) and len(keypoints) > 0:
+        if isinstance(keypoints[0], tuple) and len(keypoints[0]) == 4:
+            return keypoints
+    
+    # Si está en formato numpy array (17, 3)
+    if isinstance(keypoints, np.ndarray) and keypoints.shape == (17, 3):
+        converted = []
+        for part_id in range(17):
+            x, y, conf = keypoints[part_id]
+            converted.append((float(x), float(y), float(conf), int(part_id)))
+        return converted
+    
+    # Si está en formato numpy array (N, 3) pero no es 17
+    if isinstance(keypoints, np.ndarray) and len(keypoints.shape) == 2 and keypoints.shape[1] == 3:
+        converted = []
+        for part_id in range(keypoints.shape[0]):
+            x, y, conf = keypoints[part_id]
+            converted.append((float(x), float(y), float(conf), int(part_id)))
+        return converted
+    
+    logger.warning(f"Formato de keypoints no reconocido: {type(keypoints)}")
+    return None
+
 def draw_advanced_frame_info(
     frame_with_skeleton: np.ndarray,
     action_detection_result: Optional[Dict[str, Any]] = None,
@@ -147,14 +184,34 @@ def draw_advanced_frame_info(
     
     # Dibujar indicadores visuales adicionales usando coordenadas reales del mid_hip
     mid_hip_2d = None
-    if keypoints is not None and len(keypoints) >= 17:
-        # En el formato COCO, mid_hip está en el índice 11 y 12 (left_hip y right_hip)
-        # Calculamos el punto medio entre las dos caderas
-        left_hip = keypoints[11]  # [x, y, confidence]
-        right_hip = keypoints[12]  # [x, y, confidence]
+    
+    # Extraer coordenadas del mid_hip usando la misma lógica que gait_3d_tracker
+    if keypoints is not None:
+        # Detectar formato de keypoints y extraer mid_hip
+        left_hip = None
+        right_hip = None
         
-        # Verificar que ambas caderas tienen suficiente confianza
-        if left_hip[2] > 0.3 and right_hip[2] > 0.3:
+        # Si keypoints es numpy array (17, 3) - formato típico de TRT Pose
+        if isinstance(keypoints, np.ndarray) and keypoints.shape == (17, 3):
+            left_hip_data = keypoints[11]  # COCO left_hip
+            right_hip_data = keypoints[12]  # COCO right_hip
+            
+            if left_hip_data[2] > 0.3 and right_hip_data[2] > 0.3:
+                left_hip = (float(left_hip_data[0]), float(left_hip_data[1]), float(left_hip_data[2]))
+                right_hip = (float(right_hip_data[0]), float(right_hip_data[1]), float(right_hip_data[2]))
+        
+        # Si keypoints es lista de tuplas (x, y, conf, part_id) - formato del gait_tracker
+        elif isinstance(keypoints, list):
+            for x, y, conf, part_id in keypoints:
+                if conf < 0.3:
+                    continue
+                if part_id == 11:  # COCO_LEFT_HIP
+                    left_hip = (float(x), float(y), float(conf))
+                elif part_id == 12:  # COCO_RIGHT_HIP
+                    right_hip = (float(x), float(y), float(conf))
+        
+        # Calcular mid_hip si tenemos ambas caderas
+        if left_hip and right_hip:
             mid_hip_x = int((left_hip[0] + right_hip[0]) / 2)
             mid_hip_y = int((left_hip[1] + right_hip[1]) / 2)
             mid_hip_2d = (mid_hip_x, mid_hip_y)
@@ -168,9 +225,14 @@ def draw_advanced_frame_info(
             # Agregar texto con las coordenadas 2D del mid_hip
             coord_text = f"Hip 2D: ({mid_hip_x}, {mid_hip_y})"
             cv2.putText(output_frame, coord_text, (mid_hip_x - 50, mid_hip_y - 20), font, font_scale-0.2, distance_color, 1)
+            
+            # Mostrar confianza mínima de las caderas
+            min_conf = min(left_hip[2], right_hip[2])
+            conf_text = f"Conf: {min_conf:.2f}"
+            cv2.putText(output_frame, conf_text, (mid_hip_x - 30, mid_hip_y + 25), font, font_scale-0.3, distance_color, 1)
     
-    # Si no tenemos keypoints pero sí gait tracking, usar aproximación anterior
-    elif gait_tracking_result and 'point_3d' in gait_tracking_result and gait_tracking_result['point_3d'] is not None:
+    # Si no tenemos keypoints válidos pero sí gait tracking, usar punto 3D proyectado
+    if mid_hip_2d is None and gait_tracking_result and 'point_3d' in gait_tracking_result and gait_tracking_result['point_3d'] is not None:
         # Usar aproximación del centro de la imagen como fallback
         center_x = width // 2
         center_y = height // 2 + 50  # Offset hacia abajo para cadera
@@ -179,6 +241,7 @@ def draw_advanced_frame_info(
         cv2.line(output_frame, (center_x - cross_size, center_y), (center_x + cross_size, center_y), distance_color, 2)
         cv2.line(output_frame, (center_x, center_y - cross_size), (center_x, center_y + cross_size), distance_color, 2)
         cv2.circle(output_frame, (center_x, center_y), cross_size + 5, distance_color, 2)
+        cv2.putText(output_frame, "Hip (approx)", (center_x - 30, center_y - 15), font, font_scale-0.2, distance_color, 1)
     
     # Dibujar trayectoria si tenemos múltiples puntos 3D
     if gait_tracking_result and 'trajectory_points' in gait_tracking_result:
@@ -314,33 +377,40 @@ def process_chunk_with_advanced_visualization(
         
         # Crear frames con visualización avanzada
         annotated_frames = []
+        
+        # Resetear gait tracker para este chunk
+        initial_distance = gait_tracker.total_distance_m
+        
         for frame_idx, vis_frame in enumerate(visualized_frames):
             # Obtener resultados para este frame
             action_result = action_results[frame_idx] if frame_idx < len(action_results) else None
             keypoints_current = keypoints_list[frame_idx] if frame_idx < len(keypoints_list) else None
+            depth_frame_current = depth_frames[frame_idx] if frame_idx < len(depth_frames) else None
             
-            # Información de gait tracking para este frame - usar punto específico si existe
-            if frame_idx < len(gait_tracker.trajectory_m):
-                current_3d_point = gait_tracker.trajectory_m[frame_idx]
-            else:
+            # Procesar este frame específico con gait tracker si tenemos datos válidos
+            current_3d_point = None
+            if keypoints_current is not None and depth_frame_current is not None:
+                # Convertir keypoints al formato correcto para gait tracker
+                keypoints_gait_format = convert_keypoints_to_gait_format(keypoints_current)
+                if keypoints_gait_format is not None:
+                    # Actualizar gait tracker con este frame específico
+                    current_3d_point = gait_tracker.update(keypoints_gait_format, depth_frame_current)
+                else:
+                    logger.warning(f"No se pudieron convertir keypoints en frame {frame_idx}")
+            
+            # Si no pudimos procesar con gait tracker, usar último punto conocido
+            if current_3d_point is None:
                 current_3d_point = gait_tracker.last_point()
+            
+            # Calcular distancia acumulada hasta este frame
+            frame_distance = gait_tracker.total_distance_m - initial_distance
             
             gait_info = {
                 'total_distance': gait_tracker.total_distance_m,
                 'point_3d': current_3d_point,
-                'current_frame_distance': 0.0,  # Calcularemos la distancia parcial
-                'trajectory_points': gait_tracker.trajectory_m[:frame_idx+1] if gait_tracker.trajectory_m else []
+                'current_frame_distance': frame_distance,
+                'trajectory_points': gait_tracker.trajectory_m.copy() if gait_tracker.trajectory_m else []
             }
-            
-            # Calcular distancia parcial hasta este frame
-            if frame_idx > 0 and len(gait_tracker.trajectory_m) > frame_idx:
-                partial_distance = 0.0
-                for i in range(1, min(frame_idx + 1, len(gait_tracker.trajectory_m))):
-                    if i < len(gait_tracker.trajectory_m):
-                        prev_point = gait_tracker.trajectory_m[i-1]
-                        curr_point = gait_tracker.trajectory_m[i]
-                        partial_distance += float(np.linalg.norm(curr_point - prev_point))
-                gait_info['current_frame_distance'] = partial_distance
             
             # Dibujar información avanzada con keypoints reales
             annotated_frame = draw_advanced_frame_info(
