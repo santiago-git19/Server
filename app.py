@@ -60,10 +60,10 @@ chunk_2_verified = False
 # Inicializar detectores avanzados
 # Parámetros intrínsecos de la cámara (Orbbec Gemini 335Le - valores aproximados)
 camera_intrinsics = {
-    'fx': 377.8258056640625,
-    'fy': 377.8258056640625,
-    'cx': 317.0,
-    'cy': 238.5
+    'fx': 375.0805358886719,
+    'fy': 375.0805358886719,
+    'cx': 320.6000061035156,
+    'cy': 241.5
 }
 
 # Instancias globales para análisis avanzado

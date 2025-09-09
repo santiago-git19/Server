@@ -137,7 +137,7 @@ def draw_advanced_frame_info(
         # Mostrar posición 3D de forma compacta solo si es útil
         if 'point_3d' in gait_tracking_result and gait_tracking_result['point_3d'] is not None:
             point_3d = gait_tracking_result['point_3d']
-            pos_text = f"Pos: ({point_3d[0]:.2f}, {point_3d[2]:.2f})m"
+            pos_text = f"Pos: ({point_3d[0]:.2f}, {point_3d[1]:.2f}, {point_3d[2]:.2f})m"
             cv2.putText(overlay, pos_text, (300, y_offset), font, font_scale*0.8, (200, 200, 255), 1)
     else:
         cv2.putText(overlay, "Marcha: Sin datos", (10, y_offset), font, font_scale, error_color, thickness)
