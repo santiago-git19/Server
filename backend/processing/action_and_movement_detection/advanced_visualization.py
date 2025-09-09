@@ -190,6 +190,8 @@ def draw_advanced_frame_info(
                 elif part_id == 12:  # COCO_RIGHT_HIP
                     right_hip = (float(x), float(y), float(conf))
         # Calcular mid_hip si tenemos ambas caderas
+        print("left_hip: ", left_hip)
+        print("right_hip: ", right_hip)
         if left_hip and right_hip:
             mid_hip_x = int((left_hip[0] + right_hip[0]) / 2)
             mid_hip_y = int((left_hip[1] + right_hip[1]) / 2)
