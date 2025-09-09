@@ -198,8 +198,8 @@ def draw_advanced_frame_info(
             # Dibujar marcador más discreto para mid_hip
             cross_size = 4  # Reducido de 8
             hip_color = (0, 200, 255)  # Color naranja más suave
-            print(mid_hip_2d)
-            
+            print("-------------------" + str(mid_hip_2d) + "-------------------")
+
             # Cruz más pequeña y sutil
             cv2.line(output_frame, (mid_hip_x - cross_size, mid_hip_y), (mid_hip_x + cross_size, mid_hip_y), hip_color, 1)
             cv2.line(output_frame, (mid_hip_x, mid_hip_y - cross_size), (mid_hip_x, mid_hip_y + cross_size), hip_color, 1)
