@@ -234,7 +234,7 @@ def draw_advanced_frame_info(
             if min_conf > 0.7:  # Solo mostrar si confianza alta
                 conf_text = f"{min_conf:.1f}"
                 cv2.putText(output_frame, conf_text, (mid_hip_x + 8, mid_hip_y - 8), font, font_scale*0.6, hip_color, 1)
-
+    '''
     # Dibujar trayectoria usando las coordenadas reales del mid_hip cuando disponible
     if gait_tracking_result and 'trajectory_points' in gait_tracking_result and mid_hip_2d is not None:
         trajectory_points = gait_tracking_result['trajectory_points']
@@ -250,7 +250,7 @@ def draw_advanced_frame_info(
             
             # Título del mini-mapa
             cv2.putText(output_frame, "Trayectoria", (minimap_x + 5, minimap_y + 15), font, font_scale*0.7, (255, 255, 255), 1)
-            '''
+            
             # Convertir puntos 3D al mini-mapa
             if len(trajectory_points) >= 2:
                 # Obtener rango de movimiento
@@ -285,7 +285,7 @@ def draw_advanced_frame_info(
                         # Punto actual
                         if minimap_traj:
                             cv2.circle(output_frame, minimap_traj[-1], 2, (0, 255, 0), -1)
-            '''
+            
             # Dibujar línea sutil desde mid_hip actual a la trayectoria previa (solo si hay movimiento significativo)
             if len(trajectory_points) > 5:
                 # Mostrar trail sutil en la imagen principal
@@ -296,7 +296,7 @@ def draw_advanced_frame_info(
                         alpha = (i - (len(trajectory_points) - trail_length)) / trail_length
                         trail_color = (0, int(100 + alpha * 100), int(150 + alpha * 105))  # Gradiente azul
                         cv2.circle(output_frame, mid_hip_2d, 1, trail_color, 1)
-    
+    '''
     return output_frame
 
 def save_annotated_chunk_video(
