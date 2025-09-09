@@ -199,22 +199,19 @@ def draw_advanced_frame_info(
             left_hip_data = keypoints[11]  # COCO left_hip
             right_hip_data = keypoints[12]  # COCO right_hip
             
-            if left_hip_data[2] > 0.3 and right_hip_data[2] > 0.3:
+            if left_hip_data[2] > 0.01 and right_hip_data[2] > 0.01:
                 left_hip = (float(left_hip_data[0]), float(left_hip_data[1]), float(left_hip_data[2]))
                 right_hip = (float(right_hip_data[0]), float(right_hip_data[1]), float(right_hip_data[2]))
         
         # Si keypoints es lista de tuplas (x, y, conf, part_id) - formato del gait_tracker
         elif isinstance(keypoints, list):
-            for item in keypoints:
-                # Manejar diferentes formatos de elementos en la lista
-                if len(item) >= 4:
-                    x, y, conf, part_id = item[0], item[1], item[2], item[3]
-                    if conf < 0.3:  # Aumentado el umbral de confianza
-                        continue
-                    if part_id == 11:  # COCO_LEFT_HIP
-                        left_hip = (float(x), float(y), float(conf))
-                    elif part_id == 12:  # COCO_RIGHT_HIP
-                        right_hip = (float(x), float(y), float(conf))
+            for x, y, conf, part_id in keypoints:
+                if conf < 0.01:
+                    continue
+                if part_id == 11:  # COCO_LEFT_HIP
+                    left_hip = (float(x), float(y), float(conf))
+                elif part_id == 12:  # COCO_RIGHT_HIP
+                    right_hip = (float(x), float(y), float(conf))
         # Calcular mid_hip si tenemos ambas caderas
         print("left_hip: ", left_hip)
         print("right_hip: ", right_hip)
