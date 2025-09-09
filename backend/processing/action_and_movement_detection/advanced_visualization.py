@@ -28,8 +28,15 @@ def convert_keypoints_to_gait_format(keypoints) -> Optional[List[Tuple[float, fl
     
     # Si ya está en formato de lista de tuplas (x, y, conf, part_id)
     if isinstance(keypoints, list) and len(keypoints) > 0:
+        # Verificar si es una lista de tuplas con 4 elementos
         if isinstance(keypoints[0], tuple) and len(keypoints[0]) == 4:
             return keypoints
+        # Verificar si es una lista de listas con 4 elementos
+        elif isinstance(keypoints[0], list) and len(keypoints[0]) == 4:
+            return [(float(x), float(y), float(conf), int(part_id)) for x, y, conf, part_id in keypoints]
+        # Verificar si es una lista de tuplas con 3 elementos (sin part_id)
+        elif isinstance(keypoints[0], (tuple, list)) and len(keypoints[0]) == 3:
+            return [(float(x), float(y), float(conf), int(i)) for i, (x, y, conf) in enumerate(keypoints)]
     
     # Si está en formato numpy array (17, 3)
     if isinstance(keypoints, np.ndarray) and keypoints.shape == (17, 3):
@@ -47,7 +54,14 @@ def convert_keypoints_to_gait_format(keypoints) -> Optional[List[Tuple[float, fl
             converted.append((float(x), float(y), float(conf), int(part_id)))
         return converted
     
-    logger.warning(f"Formato de keypoints no reconocido: {type(keypoints)}")
+    # Si es una lista pero no pudimos procesarla arriba
+    if isinstance(keypoints, list):
+        logger.warning(f"Lista de keypoints con formato no reconocido. Longitud: {len(keypoints)}, "
+                      f"Primer elemento: {keypoints[0] if keypoints else 'vacío'}, "
+                      f"Tipo primer elemento: {type(keypoints[0]) if keypoints else 'N/A'}")
+    else:
+        logger.warning(f"Formato de keypoints no reconocido: {type(keypoints)}")
+    
     return None
 
 def draw_advanced_frame_info(
@@ -167,6 +181,15 @@ def draw_advanced_frame_info(
     
     # Extraer coordenadas del mid_hip usando la misma lógica que gait_3d_tracker
     if keypoints is not None:
+        # Debug: mostrar información sobre los keypoints recibidos
+        logger.debug(f"Keypoints recibidos - Tipo: {type(keypoints)}, "
+                    f"Es lista: {isinstance(keypoints, list)}, "
+                    f"Es numpy: {isinstance(keypoints, np.ndarray)}")
+        if isinstance(keypoints, list) and len(keypoints) > 0:
+            logger.debug(f"Primer elemento de la lista: {keypoints[0]}, Tipo: {type(keypoints[0])}")
+        elif isinstance(keypoints, np.ndarray):
+            logger.debug(f"Shape del array numpy: {keypoints.shape}")
+        
         # Detectar formato de keypoints y extraer mid_hip
         left_hip = None
         right_hip = None
@@ -182,13 +205,16 @@ def draw_advanced_frame_info(
         
         # Si keypoints es lista de tuplas (x, y, conf, part_id) - formato del gait_tracker
         elif isinstance(keypoints, list):
-            for x, y, conf, part_id in keypoints:
-                if conf < 0.01:
-                    continue
-                if part_id == 11:  # COCO_LEFT_HIP
-                    left_hip = (float(x), float(y), float(conf))
-                elif part_id == 12:  # COCO_RIGHT_HIP
-                    right_hip = (float(x), float(y), float(conf))
+            for item in keypoints:
+                # Manejar diferentes formatos de elementos en la lista
+                if len(item) >= 4:
+                    x, y, conf, part_id = item[0], item[1], item[2], item[3]
+                    if conf < 0.3:  # Aumentado el umbral de confianza
+                        continue
+                    if part_id == 11:  # COCO_LEFT_HIP
+                        left_hip = (float(x), float(y), float(conf))
+                    elif part_id == 12:  # COCO_RIGHT_HIP
+                        right_hip = (float(x), float(y), float(conf))
         # Calcular mid_hip si tenemos ambas caderas
         print("left_hip: ", left_hip)
         print("right_hip: ", right_hip)
