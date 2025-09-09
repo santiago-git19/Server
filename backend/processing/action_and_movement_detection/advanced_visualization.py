@@ -250,7 +250,7 @@ def draw_advanced_frame_info(
             
             # Título del mini-mapa
             cv2.putText(output_frame, "Trayectoria", (minimap_x + 5, minimap_y + 15), font, font_scale*0.7, (255, 255, 255), 1)
-            
+            '''
             # Convertir puntos 3D al mini-mapa
             if len(trajectory_points) >= 2:
                 # Obtener rango de movimiento
@@ -285,7 +285,7 @@ def draw_advanced_frame_info(
                         # Punto actual
                         if minimap_traj:
                             cv2.circle(output_frame, minimap_traj[-1], 2, (0, 255, 0), -1)
-            
+            '''
             # Dibujar línea sutil desde mid_hip actual a la trayectoria previa (solo si hay movimiento significativo)
             if len(trajectory_points) > 5:
                 # Mostrar trail sutil en la imagen principal
