@@ -200,7 +200,6 @@ def draw_advanced_frame_info(
             # Dibujar marcador más discreto para mid_hip
             cross_size = 4  # Reducido de 8
             hip_color = (0, 200, 255)  # Color naranja más suave
-            print("-------------------" + str(mid_hip_2d) + "-------------------")
 
             # Cruz más pequeña y sutil
             cv2.line(output_frame, (mid_hip_x - cross_size, mid_hip_y), (mid_hip_x + cross_size, mid_hip_y), hip_color, 1)
@@ -261,8 +260,8 @@ def draw_advanced_frame_info(
                             cv2.line(output_frame, minimap_traj[i-1], minimap_traj[i], (0, color_intensity, 255), 1)
                         
                         # Punto actual
-                        #if minimap_traj:
-                            #cv2.circle(output_frame, minimap_traj[-1], 2, (0, 255, 0), -1)
+                        if minimap_traj:
+                            cv2.circle(output_frame, minimap_traj[-1], 2, (0, 255, 0), -1)
             
             # Dibujar línea sutil desde mid_hip actual a la trayectoria previa (solo si hay movimiento significativo)
             if len(trajectory_points) > 5:
