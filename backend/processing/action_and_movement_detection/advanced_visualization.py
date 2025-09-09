@@ -183,7 +183,7 @@ def draw_advanced_frame_info(
         # Si keypoints es lista de tuplas (x, y, conf, part_id) - formato del gait_tracker
         elif isinstance(keypoints, list):
             for x, y, conf, part_id in keypoints:
-                if conf < 0.3:
+                if conf < 0.01:
                     continue
                 if part_id == 11:  # COCO_LEFT_HIP
                     left_hip = (float(x), float(y), float(conf))
