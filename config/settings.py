@@ -118,6 +118,83 @@ class MMPoseConfig:
         self.checkpoints_dir.mkdir(parents=True, exist_ok=True)
 
 @dataclass
+class CameraIntrinsicsConfig:
+    """Configuración de parámetros intrínsecos para cada cámara"""
+    
+    # Parámetros intrínsecos por cámara (Orbbec Gemini 335Le)
+    # Formato: camera_id -> {'fx': float, 'fy': float, 'cx': float, 'cy': float}
+    intrinsics: Dict[int, Dict[str, float]] = field(default_factory=lambda: {
+        0: {  # Cámara 0
+            'fx': 375.0805358886719,
+            'fy': 375.0805358886719,
+            'cx': 320.6000061035156,
+            'cy': 241.5
+        },
+        1: {  # Cámara 1
+            'fx': 374.8923645019531,
+            'fy': 374.8923645019531,
+            'cx': 319.2150573730469,
+            'cy': 240.8741760253906
+        },
+        2: {  # Cámara 2
+            'fx': 375.2341766357422,
+            'fy': 375.2341766357422,
+            'cx': 321.1058044433594,
+            'cy': 242.0329895019531
+        },
+        3: {  # Cámara 3
+            'fx': 374.7654418945312,
+            'fy': 374.7654418945312,
+            'cx': 318.9876098632812,
+            'cy': 241.2156982421875
+        },
+        4: {  # Cámara 4
+            'fx': 375.4127502441406,
+            'fy': 375.4127502441406,
+            'cx': 322.0945434570312,
+            'cy': 242.7083740234375
+        }
+    })
+    
+    def get_intrinsics(self, camera_id: int) -> Dict[str, float]:
+        """
+        Obtener parámetros intrínsecos para una cámara específica.
+        
+        Args:
+            camera_id: ID de la cámara (0-4)
+            
+        Returns:
+            Diccionario con parámetros intrínsecos {'fx', 'fy', 'cx', 'cy'}
+            
+        Raises:
+            ValueError: Si camera_id no está configurado
+        """
+        if camera_id not in self.intrinsics:
+            raise ValueError(f"Camera ID {camera_id} not configured. Available cameras: {list(self.intrinsics.keys())}")
+        
+        return self.intrinsics[camera_id].copy()
+    
+    def get_available_cameras(self) -> list:
+        """Obtener lista de cámaras configuradas"""
+        return list(self.intrinsics.keys())
+    
+    def set_intrinsics(self, camera_id: int, fx: float, fy: float, cx: float, cy: float):
+        """
+        Configurar parámetros intrínsecos para una cámara específica.
+        
+        Args:
+            camera_id: ID de la cámara
+            fx, fy: Distancia focal en píxeles
+            cx, cy: Centro óptico en píxeles
+        """
+        self.intrinsics[camera_id] = {
+            'fx': float(fx),
+            'fy': float(fy),
+            'cx': float(cx),
+            'cy': float(cy)
+        }
+
+@dataclass
 class ProcessingConfig:
     """Configuración para procesamiento de video"""
     # Configuración de videos anotados
@@ -132,6 +209,7 @@ class EnsembleConfig:
 # Instancias globales de configuración
 server_config = ServerConfig()
 gpu_config = GPUConfig()
+camera_intrinsics_config = CameraIntrinsicsConfig()
 processing_config = ProcessingConfig()
 ensemble_config = EnsembleConfig()
 data_config = DataConfig()

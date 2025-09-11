@@ -13,7 +13,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Importar configuraciones
-from config import server_config, data_config, gpu_config
+from config import server_config, data_config, gpu_config, camera_intrinsics_config
 from backend.processing.coordinator import PoseProcessingCoordinator
 from backend.processing.ensemble import EnsembleProcessor
 
@@ -58,20 +58,43 @@ current_session = {
 chunk_2_verified = False
 
 # Inicializar detectores avanzados
-# Parámetros intrínsecos de la cámara (Orbbec Gemini 335Le - valores aproximados)
-camera_intrinsics = {
-    'fx': 375.0805358886719,
-    'fy': 375.0805358886719,
-    'cx': 320.6000061035156,
-    'cy': 241.5
-}
-
 # Instancias globales para análisis avanzado
 posture_classifier = PostureClassifier(confidence_threshold=0.01)
-gait_tracker = Gait3DTracker(camera_intrinsics=camera_intrinsics)
+
+# Gait tracker se inicializará por cámara según sea necesario
+gait_trackers = {}  # Dict[int, Gait3DTracker] - un tracker por cámara
 
 # Lock para gait tracker (para evitar concurrencia entre chunks)
 gait_tracker_lock = threading.Lock()
+
+def get_gait_tracker_for_camera(camera_id: int) -> Gait3DTracker:
+    """
+    Obtener o crear un gait tracker para la cámara especificada.
+    
+    Args:
+        camera_id: ID de la cámara
+        
+    Returns:
+        Instancia de Gait3DTracker configurada para la cámara
+    """
+    if camera_id not in gait_trackers:
+        try:
+            # Obtener intrínsecos de la cámara desde configuración
+            intrinsics = camera_intrinsics_config.get_intrinsics(camera_id)
+            
+            # Crear nuevo tracker para esta cámara
+            gait_trackers[camera_id] = Gait3DTracker(camera_intrinsics=intrinsics)
+            logger.info(f"Gait tracker creado para cámara {camera_id} con intrínsecos: {intrinsics}")
+            
+        except ValueError as e:
+            # Si no hay intrínsecos para esta cámara, usar los de cámara 0 por defecto
+            logger.warning(f"No hay intrínsecos configurados para cámara {camera_id}: {e}")
+            logger.warning("Usando intrínsecos de cámara 0 por defecto")
+            
+            default_intrinsics = camera_intrinsics_config.get_intrinsics(0)
+            gait_trackers[camera_id] = Gait3DTracker(camera_intrinsics=default_intrinsics)
+            
+    return gait_trackers[camera_id]
 
 @app.route('/health', methods=['GET'])
 def health_check():
@@ -151,10 +174,11 @@ def start_session():
         # Registrar sesión en ensemble processor
         ensemble_processor.register_session_start(patient_id, session_id, cameras_count)
         
-        # Reiniciar gait tracker para nueva sesión
+        # Reiniciar gait trackers para nueva sesión
         with gait_tracker_lock:
-            gait_tracker.reset()
-            logger.info("Gait tracker reiniciado para nueva sesión")
+            # Limpiar todos los gait trackers existentes
+            gait_trackers.clear()
+            logger.info("Gait trackers reiniciados para nueva sesión")
         
         # Reiniciar flag de verificación de chunk 2. Esto es para cuando las cámaras fallan, que algunas graban chunks y otras no. Si se recibe el primer chunk 2, se verificará que todas las cámaras tengan al menos el chunk 0.
         global chunk_2_verified
@@ -511,11 +535,14 @@ def receive_chunk():
                     logger.info(f"Iniciando procesamiento avanzado para chunk {chunk_number} cámara {camera_id}")
                     
                     with gait_tracker_lock:
+                        # Obtener gait tracker específico para esta cámara
+                        camera_gait_tracker = get_gait_tracker_for_camera(camera_id)
+                        
                         # Procesar con visualización avanzada
                         advanced_results = process_chunk_with_advanced_visualization(
                             trt_detector=trt_detector,
                             manual_action_detector=posture_classifier,
-                            gait_tracker=gait_tracker,
+                            gait_tracker=camera_gait_tracker,
                             video_path=color_path,
                             depth_frames=depth_frames,
                             camera_id=camera_id,
@@ -592,11 +619,15 @@ def get_gait_stats():
     """
     try:
         with gait_tracker_lock:
-            stats = gait_tracker.stats()
+            # Obtener estadísticas de todos los gait trackers activos
+            all_stats = {}
+            for camera_id, tracker in gait_trackers.items():
+                all_stats[f'camera_{camera_id}'] = tracker.stats()
         
         return jsonify({
             'status': 'success',
-            'gait_stats': stats,
+            'gait_stats': all_stats,
+            'active_cameras': list(gait_trackers.keys()),
             'session_info': {
                 'patient_id': current_session.get('patient_id'),
                 'session_id': current_session.get('session_id'),
@@ -631,6 +662,48 @@ def get_gpu_status():
     except Exception as e:
         logger.error(f"Error obteniendo estado de GPU: {str(e)}")
         return jsonify({'error': f'Failed to get GPU status: {str(e)}'}), 500
+
+@app.route('/api/cameras/intrinsics', methods=['GET'])
+def get_camera_intrinsics():
+    """
+    Obtener parámetros intrínsecos configurados para todas las cámaras
+    """
+    try:
+        available_cameras = camera_intrinsics_config.get_available_cameras()
+        all_intrinsics = {}
+        
+        for camera_id in available_cameras:
+            all_intrinsics[camera_id] = camera_intrinsics_config.get_intrinsics(camera_id)
+        
+        return jsonify({
+            'status': 'success',
+            'available_cameras': available_cameras,
+            'intrinsics': all_intrinsics
+        })
+        
+    except Exception as e:
+        logger.error(f"Error obteniendo intrínsecos de cámaras: {str(e)}")
+        return jsonify({'error': f'Failed to get camera intrinsics: {str(e)}'}), 500
+
+@app.route('/api/cameras/intrinsics/<int:camera_id>', methods=['GET'])
+def get_camera_intrinsics_by_id(camera_id: int):
+    """
+    Obtener parámetros intrínsecos para una cámara específica
+    """
+    try:
+        intrinsics = camera_intrinsics_config.get_intrinsics(camera_id)
+        
+        return jsonify({
+            'status': 'success',
+            'camera_id': camera_id,
+            'intrinsics': intrinsics
+        })
+        
+    except ValueError as e:
+        return jsonify({'error': str(e)}), 404
+    except Exception as e:
+        logger.error(f"Error obteniendo intrínsecos de cámara {camera_id}: {str(e)}")
+        return jsonify({'error': f'Failed to get intrinsics for camera {camera_id}: {str(e)}'}), 500
 
 @app.errorhandler(413)
 def too_large(e):

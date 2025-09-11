@@ -234,69 +234,6 @@ def draw_advanced_frame_info(
             if min_conf > 0.7:  # Solo mostrar si confianza alta
                 conf_text = f"{min_conf:.1f}"
                 cv2.putText(output_frame, conf_text, (mid_hip_x + 8, mid_hip_y - 8), font, font_scale*0.6, hip_color, 1)
-    '''
-    # Dibujar trayectoria usando las coordenadas reales del mid_hip cuando disponible
-    if gait_tracking_result and 'trajectory_points' in gait_tracking_result and mid_hip_2d is not None:
-        trajectory_points = gait_tracking_result['trajectory_points']
-        if len(trajectory_points) > 1:
-            # Usar mini-mapa en esquina inferior derecha para la trayectoria 3D
-            minimap_size = 120
-            minimap_x = width - minimap_size - 10
-            minimap_y = height - minimap_size - 10
-            
-            # Fondo del mini-mapa
-            cv2.rectangle(output_frame, (minimap_x, minimap_y), (minimap_x + minimap_size, minimap_y + minimap_size), (40, 40, 40), -1)
-            cv2.rectangle(output_frame, (minimap_x, minimap_y), (minimap_x + minimap_size, minimap_y + minimap_size), (100, 100, 100), 1)
-            
-            # Título del mini-mapa
-            cv2.putText(output_frame, "Trayectoria", (minimap_x + 5, minimap_y + 15), font, font_scale*0.7, (255, 255, 255), 1)
-            
-            # Convertir puntos 3D al mini-mapa
-            if len(trajectory_points) >= 2:
-                # Obtener rango de movimiento
-                points_array = np.array([p for p in trajectory_points[-20:] if p is not None])  # Últimos 20 puntos
-                if len(points_array) > 1:
-                    x_min, x_max = np.min(points_array[:, 0]), np.max(points_array[:, 0])
-                    z_min, z_max = np.min(points_array[:, 2]), np.max(points_array[:, 2])
-                    
-                    # Evitar división por cero
-                    x_range = max(x_max - x_min, 0.1)
-                    z_range = max(z_max - z_min, 0.1)
-                    
-                    minimap_traj = []
-                    for point_3d in trajectory_points[-20:]:
-                        if point_3d is not None:
-                            # Normalizar al mini-mapa
-                            x_norm = (point_3d[0] - x_min) / x_range
-                            z_norm = (point_3d[2] - z_min) / z_range
-                            
-                            x_map = int(minimap_x + 10 + x_norm * (minimap_size - 20))
-                            y_map = int(minimap_y + minimap_size - 10 - z_norm * (minimap_size - 40))
-                            
-                            minimap_traj.append((x_map, y_map))
-                    
-                    # Dibujar trayectoria en mini-mapa
-                    if len(minimap_traj) > 1:
-                        for i in range(1, len(minimap_traj)):
-                            alpha = i / len(minimap_traj)  # Desvanecimiento
-                            color_intensity = int(100 + alpha * 155)
-                            cv2.line(output_frame, minimap_traj[i-1], minimap_traj[i], (0, color_intensity, 255), 1)
-                        
-                        # Punto actual
-                        if minimap_traj:
-                            cv2.circle(output_frame, minimap_traj[-1], 2, (0, 255, 0), -1)
-            
-            # Dibujar línea sutil desde mid_hip actual a la trayectoria previa (solo si hay movimiento significativo)
-            if len(trajectory_points) > 5:
-                # Mostrar trail sutil en la imagen principal
-                trail_length = min(5, len(trajectory_points))
-                for i in range(max(0, len(trajectory_points) - trail_length), len(trajectory_points) - 1):
-                    if i < len(trajectory_points) - 1:
-                        # Usar posición actual del mid_hip como referencia
-                        alpha = (i - (len(trajectory_points) - trail_length)) / trail_length
-                        trail_color = (0, int(100 + alpha * 100), int(150 + alpha * 105))  # Gradiente azul
-                        cv2.circle(output_frame, mid_hip_2d, 1, trail_color, 1)
-    '''
     return output_frame
 
 def save_annotated_chunk_video(
@@ -388,12 +325,13 @@ def process_chunk_with_advanced_visualization(
         # Para manual action detector, necesitamos separar keypoints por cámara
         # Asumiendo que tenemos al menos 2 cámaras (frontal y lateral)
         frontal_keypoints = keypoints_list if camera_id == 0 else []
-        lateral_keypoints = keypoints_list if camera_id == 1 else []
+        lateral_keypoints = keypoints_list #if camera_id == 0 else []
         
         # Procesar detección de acciones (simplificado para un solo set de keypoints)
         action_results = []
         if frontal_keypoints and lateral_keypoints:
             for frame_idx, (front_kp, lat_kp) in enumerate(zip(frontal_keypoints, lateral_keypoints)):
+                print("----------------------------Lateral Keypoints: " + str(lat_kp) + "----------------------------")
                 action_result = manual_action_detector.classify_posture([], lat_kp)
                 action_results.append(action_result)
         
