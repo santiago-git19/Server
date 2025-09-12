@@ -332,7 +332,7 @@ def process_chunk_with_advanced_visualization(
         if frontal_keypoints and lateral_keypoints:
             for frame_idx, (front_kp, lat_kp) in enumerate(zip(frontal_keypoints, lateral_keypoints)):
                 print("----------------------------Lateral Keypoints: " + str(lat_kp) + "----------------------------")
-                action_result = manual_action_detector.classify_posture([], lat_kp)
+                action_result = manual_action_detector.classify_posture(lat_kp, lat_kp)
                 action_results.append(action_result)
         
         # Crear frames con visualización avanzada

@@ -411,8 +411,8 @@ class PostureClassifier:
             Dict: Resultado final combinado
         """
         # Pesos para cada cámara (lateral tiene más peso para posturas)
-        lateral_weight = 0.7
-        frontal_weight = 0.3
+        lateral_weight = 1
+        frontal_weight = 0
         
         frontal_posture = frontal_result['posture']
         lateral_posture = lateral_result['posture']
